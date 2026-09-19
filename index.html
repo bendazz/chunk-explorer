@@ -87,6 +87,18 @@
   .pill.ok { background: var(--ok-bg); color: var(--ok); }
   .pill.over { background: var(--warn-bg); color: var(--warn); }
 
+  .f2 {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    margin-top: 12px; padding: 12px 14px; display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 18px;
+  }
+  .f2 h2 { margin: 0; font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; flex-basis: 100%; }
+  .f2 .field { flex: 1 1 150px; max-width: 220px; }
+  .f2 .result { flex: 1 1 220px; align-self: center; }
+  .f2 .result .value { font: 600 1.5rem/1.2 var(--sans); }
+  .f2 .result .sub { font-size: .85rem; color: var(--muted); }
+  .f2 .formula { flex-basis: 100%; font-size: .85rem; color: var(--muted); }
+  .f2 .formula code { font-family: var(--mono); }
+  .f2 .result .value.bad { color: var(--warn); font-size: 1rem; font-weight: 600; }
   .error { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 14px; margin-top: 16px; font-weight: 500; }
   .error[hidden] { display: none; }
 
@@ -177,6 +189,25 @@
     </div>
   </section>
 
+  <section class="f2" aria-labelledby="f2-title">
+    <h2 id="f2-title">F2 calculator</h2>
+    <div class="field">
+      <label for="f2-r">Recall</label>
+      <input id="f2-r" placeholder="e.g. 1/2" spellcheck="false" inputmode="decimal">
+      <div class="hint">relevant retrieved ÷ all relevant</div>
+    </div>
+    <div class="field">
+      <label for="f2-p">Precision</label>
+      <input id="f2-p" placeholder="e.g. 1/4" spellcheck="false" inputmode="decimal">
+      <div class="hint">relevant retrieved ÷ k</div>
+    </div>
+    <div class="result" aria-live="polite">
+      <div class="value" id="f2-out">–</div>
+      <div class="sub" id="f2-sub">Type a fraction (2/3), a decimal (0.67), or a percent (67%).</div>
+    </div>
+    <div class="formula"><b>F2 = 5 × P × R ÷ (4 × P + R)</b>. It counts recall about four times as much as precision. Find F2 for each question, then average them; a question over the token budget counts as 0.</div>
+  </section>
+
   <div class="toolbar">
     <span class="count" id="hl-count">0 highlighted</span>
     <span class="tip">Click a chunk to highlight it. Highlights are only for you; nothing is scored or saved.</span>
@@ -231,6 +262,21 @@ function splitText(text, separator, chunkSize, chunkOverlap) {
 }
 // ---- end splitter --------------------------------------------------------
 
+function parseRate(raw) {
+  var s = String(raw).trim().replace(/\s+/g, "");
+  if (s === "") return null;
+  var m, v;
+  if ((m = s.match(/^(\d+(?:\.\d+)?)\/(\d+(?:\.\d+)?)$/))) {
+    if (Number(m[2]) === 0) return NaN;
+    v = Number(m[1]) / Number(m[2]);
+  } else if ((m = s.match(/^(\d*\.?\d+)%$/))) {
+    v = Number(m[1]) / 100;
+  } else if (/^\d*\.?\d+$/.test(s)) {
+    v = Number(s);
+  } else return NaN;
+  return v >= 0 && v <= 1 ? v : NaN;
+}
+function f2Score(p, r) { return p + r === 0 ? 0 : 5 * p * r / (4 * p + r); }
 function estimateTokens(s) { return Math.ceil(s.length / 4); }
 </script>
 <script>
@@ -371,6 +417,28 @@ function estimateTokens(s) { return Math.ceil(s.length / 4); }
     updateCount();
   });
   ["sep", "size", "overlap", "k"].forEach(function (id) { $(id).addEventListener("input", rebuild); });
+
+  function updateF2() {
+    var r = parseRate($("f2-r").value), p = parseRate($("f2-p").value);
+    var out = $("f2-out"), sub = $("f2-sub");
+    out.className = "value";
+    if (r === null || p === null) {
+      out.textContent = "–";
+      sub.textContent = "Type a fraction (2/3), a decimal (0.67), or a percent (67%).";
+      return;
+    }
+    if (isNaN(r) || isNaN(p)) {
+      out.textContent = "Check your numbers";
+      out.className = "value bad";
+      sub.textContent = "Recall and precision must be between 0 and 1: a fraction like 2/3, a decimal like 0.67, or a percent like 67%.";
+      return;
+    }
+    var f = f2Score(p, r);
+    out.textContent = "F2 = " + (Math.round(f * 1000) / 1000).toFixed(3).replace(/\.?0+$/, "") ;
+    sub.textContent = "That's " + (Math.round(f * 1000) / 10) + " on the leaderboard's 0–100 scale.";
+  }
+  $("f2-r").addEventListener("input", updateF2);
+  $("f2-p").addEventListener("input", updateF2);
 
   rebuild();
 })();
