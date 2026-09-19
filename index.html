@@ -1,0 +1,379 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Chunk Explorer</title>
+<meta name="description" content="Split the Lantern Street Makerspace handbook exactly the way Langflow's Split Text does, then highlight the chunks that answer your question.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #f3f1ea;
+    --panel: #fffdf8;
+    --ink: #1f2a24;
+    --muted: #5d6a62;
+    --line: #d9d4c6;
+    --mat: #1e4d3a;
+    --mat-ink: #eef5ef;
+    --mat-grid: rgba(255,255,255,.07);
+    --accent: #1e6b4c;
+    --hl: #ffe45c;
+    --hl-edge: #d9a400;
+    --hl-ink: #1f2a24;
+    --warn: #a6461c;
+    --warn-bg: #fbe9df;
+    --ok: #1e6b4c;
+    --ok-bg: #e2f1e8;
+    --sans: "IBM Plex Sans", system-ui, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #141a17; --panel: #1c2420; --ink: #e4ebe6; --muted: #9aa9a0; --line: #33403a;
+      --mat: #10291f; --mat-ink: #dfeee4; --mat-grid: rgba(255,255,255,.05);
+      --accent: #6fcf9f; --hl: #5a4a00; --hl-edge: #e0b800; --hl-ink: #fff6c8;
+      --warn: #f0a07a; --warn-bg: #3a2218; --ok: #7fd8a8; --ok-bg: #173226;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #141a17; --panel: #1c2420; --ink: #e4ebe6; --muted: #9aa9a0; --line: #33403a;
+    --mat: #10291f; --mat-ink: #dfeee4; --mat-grid: rgba(255,255,255,.05);
+    --accent: #6fcf9f; --hl: #5a4a00; --hl-edge: #e0b800; --hl-ink: #fff6c8;
+    --warn: #f0a07a; --warn-bg: #3a2218; --ok: #7fd8a8; --ok-bg: #173226;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.5 var(--sans); }
+  .wrap { max-width: 1100px; margin: 0 auto; padding: 0 16px; }
+
+  header.mat {
+    background-color: var(--mat); color: var(--mat-ink);
+    background-image:
+      linear-gradient(var(--mat-grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--mat-grid) 1px, transparent 1px);
+    background-size: 24px 24px;
+    padding: 22px 0 18px;
+  }
+  header h1 { margin: 0; font-size: 1.7rem; letter-spacing: -.01em; }
+  header p { margin: 4px 0 0; opacity: .85; max-width: 62ch; }
+
+  .controls {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    margin: -1px 0 0; padding: 16px; display: grid; gap: 14px;
+    grid-template-columns: minmax(0,1.3fr) minmax(0,1fr) minmax(0,1fr) minmax(0,.8fr);
+  }
+  @media (max-width: 760px) { .controls { grid-template-columns: minmax(0,1fr) minmax(0,1fr); } }
+  .field { min-width: 0; }
+  .field label { display: block; font-weight: 600; font-size: .9rem; margin-bottom: 4px; }
+  .field input {
+    width: 100%; font: 1rem var(--mono); padding: 8px 10px; color: var(--ink);
+    background: var(--bg); border: 1px solid var(--line); border-radius: 8px;
+  }
+  .field input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .hint { font-size: .8rem; color: var(--muted); margin-top: 4px; }
+  .hint code { font-family: var(--mono); background: var(--bg); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+
+  .stats { display: grid; gap: 12px; grid-template-columns: repeat(3, minmax(0,1fr)); margin: 16px 0 0; }
+  @media (max-width: 760px) { .stats { grid-template-columns: minmax(0,1fr); } }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .stat .label { font-size: .8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; font-weight: 600; }
+  .stat .value { font: 600 1.5rem/1.2 var(--sans); margin-top: 2px; }
+  .stat .sub { font-size: .85rem; color: var(--muted); }
+  .tok-row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline; font-size: .92rem; margin-top: 4px; }
+  .tok-row b { font-family: var(--mono); font-size: 1.05rem; }
+  .pill { font-size: .75rem; font-weight: 600; border-radius: 999px; padding: 1px 8px; white-space: nowrap; }
+  .pill.ok { background: var(--ok-bg); color: var(--ok); }
+  .pill.over { background: var(--warn-bg); color: var(--warn); }
+
+  .error { background: var(--warn-bg); color: var(--warn); border-radius: 10px; padding: 10px 14px; margin-top: 16px; font-weight: 500; }
+  .error[hidden] { display: none; }
+
+  .toolbar {
+    position: sticky; top: 0; z-index: 5; background: var(--bg);
+    display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+    padding: 12px 0; margin-top: 8px; border-bottom: 1px solid var(--line);
+  }
+  .toolbar .count { font-weight: 600; }
+  .toolbar .tip { color: var(--muted); font-size: .9rem; flex: 1 1 260px; }
+  button.clear {
+    font: 600 .95rem var(--sans); color: var(--mat-ink); background: var(--accent); border: 0;
+    border-radius: 8px; padding: 8px 14px; cursor: pointer;
+  }
+  :root[data-theme="dark"] button.clear { color: #0d1f16; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) button.clear { color: #0d1f16; } }
+  button.clear:disabled { opacity: .45; cursor: default; }
+
+  .chunks { list-style: none; margin: 14px 0 48px; padding: 0; display: grid; gap: 12px; }
+  .chunk {
+    background: var(--panel); border: 1px solid var(--line); border-left: 6px solid var(--line);
+    border-radius: 10px; padding: 10px 14px 12px; cursor: pointer; user-select: text;
+    transition: background-color .12s, border-color .12s;
+  }
+  .chunk:hover { border-left-color: var(--hl-edge); }
+  .chunk:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .chunk[aria-pressed="true"] { background: var(--hl); border-color: var(--hl-edge); color: var(--hl-ink); }
+  .chunk .meta { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: .85rem; color: var(--muted); margin-bottom: 6px; }
+  .chunk[aria-pressed="true"] .meta { color: inherit; }
+  .chunk .num { font-weight: 700; color: var(--ink); }
+  .chunk[aria-pressed="true"] .num { color: inherit; }
+  .chunk .long { color: var(--warn); font-weight: 600; }
+  .chunk pre { margin: 0; white-space: pre-wrap; word-break: break-word; font: .9rem/1.55 var(--mono); }
+  .more { color: var(--muted); text-align: center; }
+</style>
+</head>
+<body>
+
+<header class="mat">
+  <div class="wrap">
+    <h1>Chunk Explorer</h1>
+    <p>The Lantern Street Makerspace handbook, cut into chunks exactly the way Langflow's Split Text component cuts it.</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <form class="controls" id="controls" autocomplete="off" onsubmit="return false">
+    <div class="field">
+      <label for="sep">Separator</label>
+      <input id="sep" value="\n" spellcheck="false">
+      <div class="hint" id="sep-hint"></div>
+    </div>
+    <div class="field">
+      <label for="size">Chunk Size</label>
+      <input id="size" type="number" min="1" step="1" value="1000" inputmode="numeric">
+      <div class="hint">characters</div>
+    </div>
+    <div class="field">
+      <label for="overlap">Chunk Overlap</label>
+      <input id="overlap" type="number" min="0" step="1" value="200" inputmode="numeric">
+      <div class="hint">characters</div>
+    </div>
+    <div class="field">
+      <label for="k">Number of Results (k)</label>
+      <input id="k" type="number" min="1" step="1" value="4" inputmode="numeric">
+      <div class="hint">chunks per question</div>
+    </div>
+  </form>
+
+  <div class="error" id="error" role="alert" hidden></div>
+
+  <section class="stats" id="stats" aria-live="polite">
+    <div class="stat">
+      <div class="label">Chunks</div>
+      <div class="value" id="n-chunks">–</div>
+      <div class="sub" id="n-sub"></div>
+    </div>
+    <div class="stat">
+      <div class="label">Chunk length</div>
+      <div class="value" id="avg-len">–</div>
+      <div class="sub" id="len-sub"></div>
+    </div>
+    <div class="stat">
+      <div class="label">Tokens sent per question</div>
+      <div class="tok-row"><span id="tok-avg-label">k average chunks</span><span><b id="tok-avg">–</b> <span class="pill" id="tok-avg-pill"></span></span></div>
+      <div class="tok-row"><span id="tok-max-label">k longest chunks</span><span><b id="tok-max">–</b> <span class="pill" id="tok-max-pill"></span></span></div>
+      <div class="sub">Tokens ≈ characters ÷ 4. Game budget: 1,000.</div>
+    </div>
+  </section>
+
+  <div class="toolbar">
+    <span class="count" id="hl-count">0 highlighted</span>
+    <span class="tip">Click a chunk to highlight it. Highlights are only for you; nothing is scored or saved.</span>
+    <button class="clear" id="clear" type="button" disabled>Clear highlights</button>
+  </div>
+
+  <ol class="chunks" id="chunks"></ol>
+</div>
+
+<script>
+var DOCUMENT = "THE LANTERN STREET MAKERSPACE\nMember Handbook · Harrow Falls · Fourth Edition\n\nWelcome to the Lantern Street Makerspace. Whether you came in to fix a chair, build a guitar, cut a sign for your front yard, or just see what a laser cutter does, you are now part of a shared workshop run by and for the people who use it. This handbook explains how the space works: when it is open, what membership includes, how to get trained on equipment, and what we ask of everyone who walks through the door.\n\nPlease read it once from start to finish, then keep it handy. Most questions members ask at the front desk are answered somewhere in these pages, and the stewards will often point you back here. If something is unclear or out of date, tell us. The handbook is revised every January, and many of the best changes have come from member suggestions.\n\nSECTION 1 — ABOUT THE MAKERSPACE\n\nThe Lantern Street Makerspace opened in the old Harrow Falls lantern works, a two-story brick building that manufactured railroad signal lamps until the factory closed. A group of neighbors bought the building from the county for one dollar on the condition that it be used for public education, and after two years of volunteer cleanup the first shop floor opened with a donated table saw, four sewing machines, and a borrowed 3D printer. Today the building holds more than sixty tools and serves roughly nine hundred members.\n\nWe are an independent nonprofit organization. Dues cover about two thirds of our operating costs; the rest comes from workshop fees, small grants, and donations. A volunteer board of seven members sets policy, and a paid staff of four handles the front desk, billing, and building maintenance. Day-to-day supervision of the shop floor is the job of the stewards, experienced members who volunteer for regular shifts in exchange for free membership. A steward wears a green apron, and there is always at least one steward on duty whenever the shop floor is open.\n\nOur mission is simple: to give anyone in Harrow Falls the tools, training, and room to make things. We try to keep dues low, we offer a sliding-scale fund for members who cannot afford full dues, and every piece of equipment in the building is available to every member who completes the required training. There are no private tools and no reserved machines beyond what this handbook describes.\n\nSECTION 2 — HOURS AND HOLIDAYS\n\nThe shop floor is the main workshop on the ground floor, where all powered equipment lives. The second floor holds the classroom, the textile studio, and the kitchenette, and it follows the same hours as the shop floor.\n\nMonday through Thursday, the shop floor opens at 10:00 a.m. and closes at 9:30 p.m.\nFriday, the shop floor opens at 10:00 a.m. and closes at 11:00 p.m. for Late Night Friday.\nSaturday and Sunday, the shop floor opens at 9:00 a.m. and closes at 6:00 p.m.\n\nThe front desk is staffed from 10:00 a.m. until 6:00 p.m. on weekdays and from 9:00 a.m. until 1:00 p.m. on weekends. Outside those hours, members badge in at the side door on Cobb Alley, and questions about billing or membership should wait until the desk is staffed. Stewards on duty can help with equipment and safety but cannot change your account.\n\nIn July and August, weekend hours shorten to 9:00 a.m. to 3:00 p.m. because the second floor has no air conditioning and afternoon temperatures upstairs have regularly passed ninety degrees. Weekday hours do not change in the summer.\n\nThe makerspace is closed on New Year's Day, Memorial Day, Independence Day, Labor Day, Thanksgiving Day and the day after, and December 24 through December 26. On the evening before any holiday closure, the shop floor closes early at 5:00 p.m. so that stewards can clean and lock up. Closures for weather are announced by email and on the sign in the front window by 8:00 a.m.\n\nShop floor closing times are firm. Ten minutes before closing, the lights flash twice; by closing time every machine must be off, every bench cleared, and every member on the way out. Stewards are volunteers, and they are not able to stay late so that one more cut can be finished.\n\nSECTION 3 — MEMBERSHIP LEVELS AND DUES\n\nEvery member has the same access to training and the same right to use the shop floor during open hours. The three membership levels differ in what they add on top of that.\n\nBasic — $35 per month. Includes shop floor access during open hours and the hand-tool wall. Basic members pay the full metered rate for equipment.\nMaker — $60 per month. Adds one free storage bin and a 25 percent discount on metered equipment time.\nStudio — $95 per month. Adds one free storage bin, a reserved bench on Tuesday evenings, and a 50 percent discount on metered equipment time.\n\nStudents enrolled at any college in Harrow County may join at the Maker level for $40 per month by showing a current student ID at the front desk each September. Members sixty-five and older receive the same rate. The sliding-scale fund can reduce dues further for anyone, at any level, and applications are confidential; ask the front desk for the one-page form.\n\nDues are charged automatically on the first day of each month to the card on file. If a payment fails, you will receive an email and have ten days to update your card before your badge is paused. Membership dues are not refunded for partial months, so a member who joins on the twentieth pays the full month and a member who leaves on the fifth does not get the rest of the month back.\n\nTo cancel, give notice through the member portal by the 20th of the month; notices received after the 20th take effect at the end of the following month. You may also pause your membership for up to three months per calendar year for a hold fee of $5 per month, which keeps your training records, your storage bin, and your place on any waiting lists. A membership that is cancelled rather than paused loses its storage bin at the end of the final month.\n\nSECTION 4 — EQUIPMENT AND TRAINING\n\nEvery tool in the building is labeled with a colored dot that tells you what training it requires. Green equipment needs only the general orientation. Yellow equipment needs its own short orientation. Red equipment needs a full orientation followed by a checkout, described in Section 6.\n\nGeneral orientation is a one-hour walkthrough required for every new member before their first visit to the shop floor. It covers the fire exits, the first aid station, the dust collection system, the hand-tool wall, and how to find a steward. Green equipment includes hand tools, cordless drills, the sewing machines, the soldering stations, and the drill press. Once you finish general orientation, all green equipment is yours to use.\n\nYellow equipment includes the 3D printers, the vinyl cutter, and the laser cutter. 3D printer orientation takes 45 minutes and can be completed online through the member portal. Vinyl cutter orientation takes 30 minutes and is offered after any general orientation. Laser cutter orientation is a 90-minute session held in person on the first and third Wednesday of each month, and it is limited to six people so that everyone gets time at the controls. Bring a small design on a USB drive if you would like to cut something during the session.\n\nThe vinyl cutter is made for adhesive vinyl, heat-transfer vinyl, and cardstock. It uses a small blade rather than a beam, so the material restrictions for the laser cutter do not apply to it, and vinyl sheet is sold at the front desk by the foot.\n\nThe following materials must never go in the laser cutter:\nPVC or vinyl of any kind\nPolycarbonate, sold as Lexan\nFiberglass and carbon fiber\nAny material you cannot identify\n\nCutting PVC or vinyl releases chlorine gas, which damages the laser's optics and is dangerous to breathe, and polycarbonate tends to catch fire rather than cut cleanly. Acrylic, plywood, hardwood, paper, cardboard, leather, and cotton fabric are all fine. If you are not sure what a material is, it stays out of the machine, and a steward can help you find a safe substitute from the scrap bins.\n\nRed equipment includes the CNC router, the wood lathe, the table saw, and the metal bandsaw. These machines can cause serious injury in a fraction of a second, and our training for them is deliberately slow. CNC router orientation is a three-hour session that walks through design software, choosing and changing bits, clamping stock to the spoilboard, setting the origin, and running a program with a hand on the emergency stop. Table saw orientation is a two-hour session focused on the riving knife, push sticks, kickback, and the flesh-sensing brake, which stops the blade when it touches skin and costs $120 to reset. Wood lathe orientation is a two-hour session, and the metal bandsaw orientation is one hour. Red equipment orientations are held on Saturday mornings and fill quickly, so sign up through the member portal as early as you can. Finishing an orientation does not by itself unlock a red machine; every red machine also requires the checkout described in Section 6, and orientations older than ninety days must be repeated before a checkout can be scheduled.\n\nSome equipment is metered, meaning you pay for machine time on top of your dues. Metered time is logged automatically when you badge into the machine and badge out.\n\n3D printers — $2 per hour\nVinyl cutter — $5 per hour\nLaser cutter — $12 per hour\nCNC router — $20 per hour\nWood lathe, table saw, and metal bandsaw — no metered charge\n\nTime is billed in 15-minute increments and added to your next monthly charge. Membership discounts apply to metered time automatically. If a machine faults partway through your job because of a hardware problem, tell a steward before you badge out and the time will be removed from your bill.\n\nSECTION 5 — RESERVATIONS\n\nMost equipment is first come, first served. The laser cutter and the CNC router can be reserved through the member portal in blocks of up to two hours, and each member may hold up to three future reservations at a time. Reservations open fourteen days in advance at midnight.\n\nReservations are released if you have not checked in within 15 minutes of the start time, and a released slot goes to whoever is waiting. Three missed reservations in one calendar month suspend your reservation privileges for thirty days, though you can still use either machine when it is free. If you finish early, badge out so the next person can start.\n\nThe Studio level's reserved bench on Tuesday evenings is a workbench, not a machine. It is held for you from 5:00 p.m. to closing each Tuesday and released to general use if you have not arrived by 6:00 p.m.\n\nSECTION 6 — BADGES, CHECKOUTS, AND GUESTS\n\nYour membership badge opens the side door, logs your visits, and unlocks equipment. After general orientation your badge works on all green equipment. After a yellow orientation, the front desk adds that machine to your badge within one business day.\n\nBadges for red equipment are unlocked only after a checkout, which has two parts: a short written quiz, and two supervised cuts with a steward. The quiz is ten questions and can be retaken once a week until you pass. The supervised cuts are booked separately and must be completed within sixty days of passing the quiz. A steward who sees an unsafe habit during a supervised cut may ask you to repeat it.\n\nBadges lapse after twelve months without use on a given machine. A lapsed yellow badge can be renewed with a short refresher instead of repeating the full orientation; a lapsed red badge requires a new checkout. Lost badges are replaced at the front desk for $10.\n\nMembers may bring up to two guests per visit, and each guest must sign the liability waiver at the front desk before entering the shop floor. Guests may watch and help with green equipment, but they may not operate yellow or red equipment under any circumstances, even with a member standing beside them. The member who brings a guest is responsible for that guest's conduct and safety for the whole visit, and guests must leave when their member leaves.\n\nYouth members aged 12 to 17 are welcome at every level. A youth member must be accompanied by a parent or guardian who is also a member, and each adult may supervise no more than two youth members at a time. Youth members may complete green and yellow training but not red.\n\nSECTION 7 — STORAGE AND PROJECTS\n\nThe project shelves along the north wall hold work in progress. Project shelves are free for up to 14 days. Label everything you leave with your name, the date, and your member number, using the tags and markers on the shelf end. Unlabeled items are treated as abandoned the same evening.\n\nProjects left past the 14-day limit are tagged with an orange notice. We email the member when a notice goes up, and a steward will usually mention it too, but it is your responsibility to keep track of your own work.\n\nA storage bin rents for $8 per month; Maker and Studio members receive one bin at no charge. Bins are 18 by 24 inches and stack in the racks by the east door. Large-format lockers for sheet goods and long lumber rent for $25 per month and have a waiting list, usually about four months long.\n\nNothing flammable may be stored in bins or lockers. Paints, stains, finishes, and solvents belong in the yellow flammables cabinet, which is shared, and anything in the cabinet must be labeled with your name and the date. Unlabeled containers in the cabinet are disposed of on the first Monday of each month.\n\nSECTION 8 — WORKSHOPS AND CLASSES\n\nBeyond equipment orientations, the makerspace runs workshops in woodworking, sewing, electronics, jewelry, bookbinding, and more. Workshops are open to members and non-members, and members receive a 20 percent discount on the workshop fee. Most workshops meet for two to four sessions, and the schedule for each season is posted on the first of March, June, September, and December.\n\nWorkshop fees are refunded in full if you withdraw at least 7 days before the first session. Withdrawals made less than 7 days before the first session receive a credit toward a future workshop instead of a refund. If the makerspace cancels a workshop, every participant receives a full refund automatically within ten business days.\n\nMany workshops include a material kit, priced separately from the workshop fee. Material kit fees are non-refundable once the kit has been cut, which is usually three days before the first session, because the materials cannot be used for anything else.\n\nMembers who would like to teach are encouraged to propose a workshop. Instructors are paid sixty percent of the fees collected, and proposals are reviewed at the board's monthly meeting.\n\nSECTION 9 — SAFETY\n\nSafety rules exist because every one of them follows something that has actually happened in a shop like ours, and they apply to every member, every guest, and every steward, including the most experienced. Wear safety glasses on the shop floor at all times, not just while you are cutting, because the person at the next bench may be. Tie back long hair, remove dangling jewelry, and roll up loose sleeves before operating any powered tool, and wear closed-toe shoes whenever you are past the yellow line at the shop floor entrance. Hearing protection is required at the table saw, the CNC router, and the planer, and is available free in the bins by the door. Never operate red equipment when you are the only person on the shop floor; if everyone else leaves, stop and wait for a steward. Do not use any machine while tired, rushed, or impaired, and never remove a guard or disable a safety device. Keep the floor around every machine clear of offcuts and cords. If you are hurt, stop work, apply first aid from the station beside the kitchenette stairs, and report every injury, however minor, to the shift steward on duty. The steward will help you complete an incident form within 24 hours, even if the injury seems trivial, because small injuries often reveal problems with a machine or a setup that can be fixed before someone is hurt badly. For any serious injury, call 911 first and a steward second.\n\nThe fire extinguishers are mounted beside each exit and beside the laser cutter. If the laser cutter's material catches fire, keep the lid closed, press the red stop button, and let the flame starve; open the lid only if the fire does not go out within a few seconds, and then use the extinguisher mounted next to the machine. Report every laser fire, even a small flare, to a steward.\n\nSECTION 10 — BUILDING RULES AND CONDUCT\n\nFood and drink are allowed only in the kitchenette and the second-floor classroom, never on the shop floor, because a spilled drink near a power tool is a hazard and crumbs attract pests to the lumber racks. Animals are not permitted in the building, with the exception of trained service animals. Smoking and vaping are not allowed anywhere on the property, including Cobb Alley.\n\nClean up after yourself. Sweep your area, return tools to their outlines on the wall, empty the dust collector bag if the gauge reads full, and throw offcuts smaller than your hand into the scrap bin. Leave every machine the way you would want to find it.\n\nTreat other members with respect. Harassment of any kind, including unwanted comments about someone's appearance, skill, or background, is not tolerated. Concerns can be raised with any steward, any staff member, or directly with the board through the anonymous form in the member portal.\n\nViolations of the safety rules or conduct policy follow a three-step process. A first violation earns a written warning. A second violation within twelve months suspends your membership for thirty days. A third violation within twelve months ends your membership, and you may not rejoin for two years. Serious safety violations, such as removing a guard or operating red equipment without a checkout, can skip directly to suspension at the board's discretion.\n\nSECTION 11 — FREQUENTLY ASKED QUESTIONS\n\nQ: I left a project on the shelf and forgot about it. Is it gone?\nA: Not right away. Tagged items are moved to the donation cart after 7 more days, and anything on the donation cart can be claimed by any member. Check with the front desk as soon as you remember.\n\nQ: How can a friend see the space before deciding to join?\nA: Free tours run every Saturday at 11:00 a.m. and last about half an hour. No sign-up is needed, and tour visitors do not count toward a member's guest limit.\n\nQ: Where do I park?\nA: There is free parking in the municipal lot across Lantern Street after 5:00 p.m. and all day on weekends. During the day, use the two-hour spaces on Cobb Alley. The loading zone by the side door is for unloading materials only.\n\nQ: Can I sell things I make here?\nA: Yes. Anything you make at the makerspace belongs to you, and you are welcome to sell it. We only ask that you do not advertise your business as affiliated with the makerspace without permission.\n\nQ: Something is broken. What should I do?\nA: Stop using the machine, hang one of the red \"Out of Order\" tags from the steward desk on it, and tell the steward on duty. Please do not try to repair equipment yourself, even if you know how; our maintenance log depends on repairs going through staff.\n\nQ: My badge stopped working on a machine I used to use. Why?\nA: The most common reason is that the badge lapsed after a year without use on that machine. The second most common reason is a failed dues payment, which pauses your badge everywhere. The front desk can tell you which it is.\n\nQ: Can I volunteer?\nA: Please do. Stewards receive free membership for a regular weekly shift of four hours, and we also need help with workshops, cleanup days, and the annual open house in October. Ask at the front desk for the volunteer form.\n\nThank you for being part of the Lantern Street Makerspace. Make something good.\n";
+var BUDGET = 1000;
+var MAX_SHOWN = 1500;
+
+// ---- Langflow Split Text, reproduced line for line -----------------------
+// Split Text = langchain CharacterTextSplitter(separator, chunk_size,
+// chunk_overlap, keep_separator=False), after Langflow's separator fixes.
+function langflowSeparator(typed) {
+  var sep = typed === "/n" ? "\n" : typed === "/t" ? "\t" : typed;
+  return sep.split("\\n").join("\n");
+}
+function joinDocs(docs, separator) {
+  var text = docs.join(separator).replace(/^\s+|\s+$/g, "");
+  return text === "" ? null : text;
+}
+function mergeSplits(splits, separator, chunkSize, chunkOverlap) {
+  var sepLen = separator.length, docs = [], current = [], total = 0;
+  for (var i = 0; i < splits.length; i++) {
+    var d = splits[i], len = d.length;
+    if (total + len + (current.length > 0 ? sepLen : 0) > chunkSize) {
+      if (current.length > 0) {
+        var doc = joinDocs(current, separator);
+        if (doc !== null) docs.push(doc);
+        while (total > chunkOverlap ||
+               (total + len + (current.length > 0 ? sepLen : 0) > chunkSize && total > 0)) {
+          total -= current[0].length + (current.length > 1 ? sepLen : 0);
+          current = current.slice(1);
+        }
+      }
+    }
+    current.push(d);
+    total += len + (current.length > 1 ? sepLen : 0);
+  }
+  var last = joinDocs(current, separator);
+  if (last !== null) docs.push(last);
+  return docs;
+}
+function splitText(text, separator, chunkSize, chunkOverlap) {
+  var splits = separator === "" ? Array.from(text) : text.split(separator);
+  splits = splits.filter(function (s) { return s !== ""; });
+  return mergeSplits(splits, separator, chunkSize, chunkOverlap);
+}
+// ---- end splitter --------------------------------------------------------
+
+function estimateTokens(s) { return Math.ceil(s.length / 4); }
+</script>
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  var fmt = function (n) { return n.toLocaleString("en-US"); };
+  var chunks = [];
+
+  function describeSeparator(sep) {
+    if (sep === "") return "Empty: splits between every character.";
+    var named = { "\n": "a line break", "\n\n": "a blank line (paragraph break)", "\t": "a tab", " ": "a space", ". ": "a period and a space" };
+    if (named[sep]) return "Splits at " + named[sep] + ".";
+    var shown = sep.replace(/\n/g, "↵").replace(/\t/g, "⇥").replace(/ /g, "␣");
+    return "Splits at: " + shown;
+  }
+
+  function readInt(id) {
+    var raw = $(id).value.trim();
+    if (!/^\d+$/.test(raw)) return NaN;
+    return parseInt(raw, 10);
+  }
+
+  function showError(msg) {
+    $("error").textContent = msg;
+    $("error").hidden = false;
+    $("stats").style.opacity = ".4";
+    $("chunks").innerHTML = "";
+    chunks = [];
+    updateCount();
+  }
+
+  function pill(el, tokens) {
+    var over = tokens > BUDGET;
+    el.textContent = over ? "over budget" : "within budget";
+    el.className = "pill " + (over ? "over" : "ok");
+  }
+
+  function rebuild() {
+    var typed = $("sep").value;
+    var sep = langflowSeparator(typed);
+    $("sep-hint").textContent = describeSeparator(sep);
+
+    var size = readInt("size"), overlap = readInt("overlap"), k = readInt("k");
+    if (!(size >= 1)) return showError("Chunk Size must be a whole number of at least 1.");
+    if (isNaN(overlap)) return showError("Chunk Overlap must be a whole number (0 or more).");
+    if (overlap > size) return showError("Chunk Overlap (" + fmt(overlap) + ") is larger than Chunk Size (" + fmt(size) + "). Langflow won't accept this either.");
+    if (!(k >= 1)) return showError("Number of Results (k) must be a whole number of at least 1.");
+    $("error").hidden = true;
+    $("stats").style.opacity = "";
+
+    chunks = splitText(DOCUMENT, sep, size, overlap);
+    var lens = chunks.map(function (c) { return c.length; });
+    var total = lens.reduce(function (a, b) { return a + b; }, 0);
+    var avg = total / chunks.length;
+    var longest = Math.max.apply(null, lens);
+    var tooLong = lens.filter(function (n) { return n > size; }).length;
+
+    $("n-chunks").textContent = fmt(chunks.length);
+    $("n-sub").textContent = "from a " + fmt(DOCUMENT.length) + "-character handbook";
+    $("avg-len").textContent = fmt(Math.round(avg)) + " avg";
+    $("len-sub").textContent = "Shortest " + fmt(Math.min.apply(null, lens)) + " · longest " + fmt(longest) +
+      (tooLong ? " · " + tooLong + " longer than Chunk Size" : "") + " (characters)";
+
+    var kUsed = Math.min(k, chunks.length);
+    var avgTokens = kUsed * Math.ceil(avg / 4);
+    var sortedTok = chunks.map(estimateTokens).sort(function (a, b) { return b - a; });
+    var maxTokens = sortedTok.slice(0, kUsed).reduce(function (a, b) { return a + b; }, 0);
+    var kLabel = kUsed === 1 ? "chunk" : "chunks";
+    $("tok-avg-label").textContent = kUsed + " average-length " + kLabel;
+    $("tok-max-label").textContent = kUsed === 1 ? "the longest chunk" : "the " + kUsed + " longest chunks";
+    $("tok-avg").textContent = "≈ " + fmt(avgTokens);
+    $("tok-max").textContent = "≈ " + fmt(maxTokens);
+    pill($("tok-avg-pill"), avgTokens);
+    pill($("tok-max-pill"), maxTokens);
+
+    renderChunks(size);
+  }
+
+  function renderChunks(size) {
+    var list = $("chunks");
+    list.innerHTML = "";
+    var frag = document.createDocumentFragment();
+    var shown = Math.min(chunks.length, MAX_SHOWN);
+    for (var i = 0; i < shown; i++) {
+      var c = chunks[i];
+      var li = document.createElement("li");
+      li.className = "chunk";
+      li.tabIndex = 0;
+      li.setAttribute("role", "button");
+      li.setAttribute("aria-pressed", "false");
+      var meta = document.createElement("div");
+      meta.className = "meta";
+      meta.innerHTML = '<span class="num">Chunk ' + (i + 1) + '</span><span>' + fmt(c.length) +
+        ' characters</span><span>≈ ' + fmt(estimateTokens(c)) + ' tokens</span>' +
+        (c.length > size ? '<span class="long">longer than Chunk Size: no separator to cut at</span>' : "");
+      var pre = document.createElement("pre");
+      pre.textContent = c;
+      li.appendChild(meta);
+      li.appendChild(pre);
+      frag.appendChild(li);
+    }
+    if (chunks.length > shown) {
+      var more = document.createElement("li");
+      more.className = "more";
+      more.textContent = "Showing the first " + fmt(shown) + " of " + fmt(chunks.length) + " chunks. Try a bigger Chunk Size.";
+      frag.appendChild(more);
+    }
+    list.appendChild(frag);
+    updateCount();
+  }
+
+  function toggle(li) {
+    if (!li || !li.classList.contains("chunk")) return;
+    // Don't toggle when the student is selecting text to copy.
+    var sel = window.getSelection && window.getSelection();
+    if (sel && String(sel).length > 0) return;
+    li.setAttribute("aria-pressed", li.getAttribute("aria-pressed") === "true" ? "false" : "true");
+    updateCount();
+  }
+
+  function updateCount() {
+    var n = $("chunks").querySelectorAll('.chunk[aria-pressed="true"]').length;
+    $("hl-count").textContent = n + " highlighted";
+    $("clear").disabled = n === 0;
+  }
+
+  $("chunks").addEventListener("click", function (e) { toggle(e.target.closest(".chunk")); });
+  $("chunks").addEventListener("keydown", function (e) {
+    if ((e.key === "Enter" || e.key === " ") && e.target.classList.contains("chunk")) {
+      e.preventDefault();
+      toggle(e.target);
+    }
+  });
+  $("clear").addEventListener("click", function () {
+    Array.prototype.forEach.call($("chunks").querySelectorAll('.chunk[aria-pressed="true"]'), function (li) {
+      li.setAttribute("aria-pressed", "false");
+    });
+    updateCount();
+  });
+  ["sep", "size", "overlap", "k"].forEach(function (id) { $(id).addEventListener("input", rebuild); });
+
+  rebuild();
+})();
+</script>
+</body>
+</html>
